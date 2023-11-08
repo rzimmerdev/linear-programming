@@ -14,6 +14,8 @@ pip install -r requirements.txt
 Run with 
 ```bash
 python main.py data.txt SCIP
+```
 or
+```bash
 python main.py data.txt GUROBI
 ```
