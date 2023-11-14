@@ -17,6 +17,10 @@ conda config --add channels conda-forge
 conda install gcg papilo scip soplex zimpl
 pip install -r requirements.txt
 ```
+## Install pulp
+```bash
+python -m pip install pulp
+```
 
 ## Usage
 
