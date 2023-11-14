@@ -24,7 +24,7 @@ class FacilityLocationProblem:
         for f in self.facilities:
             self.model += lpSum(self.serve[f, c] for c in self.customers) <= self.capacities[f] * self.open_facility[f], f"Capacity_{f}"
 
-    def solve(self. solver_type=None):
+    def solve(self, solver_type=None):
         if solver_type:
             solver = getSolver(solver_type)
             self.model.solve(solver)

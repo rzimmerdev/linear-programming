@@ -1,0 +1,9 @@
+n m
+cap1 f1
+cap2 f2
+...
+capn fn
+d1 c11 c21 ... cn1
+d2 c12 c22 ... cn2
+...
+dm c1m c2m ... cnm
