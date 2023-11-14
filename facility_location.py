@@ -42,10 +42,20 @@ class FacilityLocationProblem:
         status = {1: "Optimal", 0: "Not Solved", -1: "Infeasible", -2: "Unbounded", -3: "Undefined"}
         print(f"Status: {status[self.model.status]}")
         print(f"Custo: {abs(self.model.objective.value()) if self.model.objective else 0}")
+        unitary_cost = 3.5
+
+        wasted_capacity = sum(self.capacities[i] * (1 - self.y[i].varValue) for i in self.facilities)
+        used_demand = sum(self.demand[j] * self.x[i, j].varValue for i in self.facilities for j in self.customers)
+
+        wasted_price = (wasted_capacity - used_demand) * unitary_cost
+
+        # Falta inserir unitary_cost na equação objetivo
+        # print(f"Custo de desperdício: {wasted_price}")
+
         for i in self.facilities:
-            print(f"Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'}")
+            print(f"    Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'}")
             for j in self.customers:
-                print(f"  Alunos de {j} indo a {i}: {self.x[i, j].varValue}")
+                print(f"    Custo do local {j} ao ponto {i}: {self.x[i, j].varValue}")
 
     @staticmethod
     def get_solver(solver_name):
