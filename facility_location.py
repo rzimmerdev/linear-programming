@@ -1,5 +1,5 @@
 import sys
-from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpBinary, SCIP_CMD, GUROBI_CMD
+from pulp import SCIP_CMD, GUROBI_CMD, LpMinimize, LpProblem, LpVariable, lpSum, LpBinary, LpInteger
 
 
 class FacilityLocationProblem:
@@ -10,7 +10,7 @@ class FacilityLocationProblem:
         self.fixed_costs = fixed_costs
         self.capacities = capacities
         self.demand = demand
-        self.model = LpProblem("FacilityLocationProblem", LpMaximize)
+        self.model = LpProblem("FacilityLocationProblem", LpMinimize)
 
         self.x = None
         self.y = None
@@ -18,9 +18,9 @@ class FacilityLocationProblem:
     def setup_problem(self):
         self.x = LpVariable.dicts("X",
                                   ((i, j) for i in self.facilities for j in self.customers),
-                                  0, None, LpBinary)
+                                  0, None, LpInteger)
         self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary)
-        self.model += (lpSum(self.implementation_costs[i][j] * self.x[i, j]
+        self.model += (lpSum(self.implementation_costs[j][i] * self.x[i, j]
                              for i in self.facilities for j in self.customers) -
                        lpSum(self.fixed_costs[i] * self.y[i] for i in self.facilities))
 
@@ -41,11 +41,11 @@ class FacilityLocationProblem:
     def print_solution(self):
         status = {1: "Optimal", 0: "Not Solved", -1: "Infeasible", -2: "Unbounded", -3: "Undefined"}
         print(f"Status: {status[self.model.status]}")
-        print(f"Total Profit: {self.model.objective.value() if self.model.objective else 0}")
+        print(f"Custo: {abs(self.model.objective.value()) if self.model.objective else 0}")
         for i in self.facilities:
-            print(f"{i} Instalação de Facilidade i: {self.y[i].varValue}")
+            print(f"Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'}")
             for j in self.customers:
-                print(f"  Proporção de clientes de i, j {j}: {self.x[i, j].varValue}")
+                print(f"  Alunos de {j} indo a {i}: {self.x[i, j].varValue}")
 
     @staticmethod
     def get_solver(solver_name):
@@ -64,8 +64,8 @@ class FacilityLocationProblem:
 def read_data(filename):
     with open(filename, 'r') as file:
         num_facilities, num_customers = map(int, file.readline().split())
-        facilities = [f'Facility{i + 1}' for i in range(num_facilities)]
-        customers = [f'Customer{j + 1}' for j in range(num_customers)]
+        facilities = list(range(num_facilities))
+        customers = list(range(num_customers))
 
         capacities = {}
         fixed_costs = {}
