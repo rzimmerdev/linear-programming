@@ -3,31 +3,33 @@ from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpBinary, SCIP_CMD, G
 
 
 class FacilityLocationProblem:
-    def __init__(self, facilities, customers, profits, fixed_costs, capacities):
+    def __init__(self, facilities, customers, profits, fixed_costs, capacities, demand):
         self.facilities = facilities
         self.customers = customers
-        self.profits = profits
+        self.implementation_costs = profits
         self.fixed_costs = fixed_costs
         self.capacities = capacities
+        self.demand = demand
         self.model = LpProblem("FacilityLocationProblem", LpMaximize)
 
-        self.serve = None
-        self.open_facility = None
+        self.x = None
+        self.y = None
 
     def setup_problem(self):
-        self.serve = LpVariable.dicts("Serve",
-                                      ((f, c) for f in self.facilities for c in self.customers),
-                                      0, None, LpBinary)
-        self.open_facility = LpVariable.dicts("Open", self.facilities, 0, None, LpBinary)
-        self.model += (lpSum(self.profits[c][f] * self.serve[f, c] for f in self.facilities for c in self.customers) -
-                       lpSum(self.fixed_costs[f] * self.open_facility[f] for f in self.facilities))
+        self.x = LpVariable.dicts("X",
+                                  ((i, j) for i in self.facilities for j in self.customers),
+                                  0, None, LpBinary)
+        self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary)
+        self.model += (lpSum(self.implementation_costs[i][j] * self.x[i, j]
+                             for i in self.facilities for j in self.customers) -
+                       lpSum(self.fixed_costs[i] * self.y[i] for i in self.facilities))
 
-        for c in self.customers:
-            self.model += lpSum(self.serve[f, c] for f in self.facilities) == 1, f"Demand_{c}"
+        for j in self.customers:
+            self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Demand_{j}"
 
-        for f in self.facilities:
-            self.model += (lpSum(self.serve[f, c] for c in self.customers) <= self.capacities[f] *
-                           self.open_facility[f], f"Capacity_{f}")
+        for i in self.facilities:
+            self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i] *
+                           self.y[i], f"Capacity_{i}")
 
     def solve(self, solver_name=None):
         if solver_name:
@@ -40,10 +42,10 @@ class FacilityLocationProblem:
         status = {1: "Optimal", 0: "Not Solved", -1: "Infeasible", -2: "Unbounded", -3: "Undefined"}
         print(f"Status: {status[self.model.status]}")
         print(f"Total Profit: {self.model.objective.value() if self.model.objective else 0}")
-        for f in self.facilities:
-            print(f"{f} open: {self.open_facility[f].varValue}")
-            for c in self.customers:
-                print(f"  Serve {c}: {self.serve[f, c].varValue}")
+        for i in self.facilities:
+            print(f"{i} Instalação de Facilidade i: {self.y[i].varValue}")
+            for j in self.customers:
+                print(f"  Proporção de clientes de i, j {j}: {self.x[i, j].varValue}")
 
     @staticmethod
     def get_solver(solver_name):
@@ -73,17 +75,19 @@ def read_data(filename):
             fixed_costs[facilities[i]] = cost
 
         profits = {}
+        demand = {}
+
         for j in range(num_customers):
             data = list(map(int, file.readline().split()))
-            # demand = data[0]
+            demand[customers[j]] = data[0]
             profits[customers[j]] = {facilities[i]: data[i + 1] for i in range(num_facilities)}
 
-        return facilities, customers, profits, fixed_costs, capacities
+        return facilities, customers, profits, fixed_costs, capacities, demand
 
 
 def main(filename, solver_name=None):
-    facilities, customers, profits, fixed_costs, capacities = read_data(filename)
-    problem = FacilityLocationProblem(facilities, customers, profits, fixed_costs, capacities)
+    facilities, customers, profits, fixed_costs, capacities, demand = read_data(filename)
+    problem = FacilityLocationProblem(facilities, customers, profits, fixed_costs, capacities, demand)
     problem.setup_problem()
     problem.solve(solver_name)
     problem.print_solution()
