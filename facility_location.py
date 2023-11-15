@@ -18,18 +18,18 @@ class FacilityLocationProblem:
     def setup_problem(self):
         self.x = LpVariable.dicts("X",
                                   ((i, j) for i in self.facilities for j in self.customers),
-                                  0, None, LpInteger)
-        self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary)
+                                  0, None, LpInteger)   # restrição 5
+        self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary) # restrição 4
         self.model += (lpSum(self.implementation_costs[j][i] * self.x[i, j]
-                             for i in self.facilities for j in self.customers) -
-                       lpSum(self.fixed_costs[i] * self.y[i] for i in self.facilities))
+                             for i in self.facilities for j in self.customers) +
+                       lpSum(self.fixed_costs[i] * self.y[i] for i in self.facilities)) # função objetiva
 
         for j in self.customers:
-            self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Demand_{j}"
+            self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Demand_{j}" # restrição 2
 
         for i in self.facilities:
             self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i] *
-                           self.y[i], f"Capacity_{i}")
+                           self.y[i], f"Capacity_{i}") # restrição 3
 
     def solve(self, solver_name=None):
         if solver_name:
