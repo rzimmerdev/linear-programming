@@ -1,12 +1,13 @@
-import sys
-from pulp import SCIP_CMD, GUROBI_CMD, LpMinimize, LpProblem, LpVariable, lpSum, LpBinary, LpInteger
+import sys, os
+from pulp import PULP_CBC_CMD, SCIP_CMD, GUROBI_CMD
+from pulp import LpMinimize, LpProblem, LpVariable, lpSum, LpBinary, LpContinuous
 
 
 class FacilityLocationProblem:
-    def __init__(self, facilities, customers, profits, fixed_costs, capacities, demand):
+    def __init__(self, facilities, customers, capacities, implementation_costs, demand, fixed_costs, relaxed=True):
         self.facilities = facilities
         self.customers = customers
-        self.implementation_costs = profits
+        self.implementation_costs = implementation_costs
         self.fixed_costs = fixed_costs
         self.capacities = capacities
         self.demand = demand
@@ -15,60 +16,88 @@ class FacilityLocationProblem:
         self.x = None
         self.y = None
 
+        self.relaxed = relaxed
+
     def setup_problem(self):
+        # Variables
+        # x: Continuous 0 <= x <= 1
         self.x = LpVariable.dicts("X",
                                   ((i, j) for i in self.facilities for j in self.customers),
-                                  0, None, LpInteger)
+                                  0, 1, LpContinuous)
         self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary)
-        self.model += (lpSum(self.implementation_costs[j][i] * self.x[i, j]
-                             for i in self.facilities for j in self.customers) -
-                       lpSum(self.fixed_costs[i] * self.y[i] for i in self.facilities))
+        self.model += (lpSum(self.implementation_costs[i] * self.y[i] for i in self.facilities) +
+                       lpSum(self.fixed_costs[j][i] * self.x[i, j] for i in self.facilities for j in self.customers),
+                       "Objective")
 
-        for j in self.customers:
-            self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Demand_{j}"
+        if self.relaxed:
+            for j in self.customers:
+                self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Customer_{j}"
+        else:
+            for j in self.customers:
+                for i in self.facilities:
+                    self.model += self.x[i, j] <= self.y[i], f"Customer_{j}_{i}"
 
         for i in self.facilities:
             self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i] *
                            self.y[i], f"Capacity_{i}")
 
-    def solve(self, solver_name=None):
-        if solver_name:
-            solver = self.get_solver(solver_name)
-            self.model.solve(solver)
-        else:
-            self.model.solve()
-
     def print_solution(self):
         status = {1: "Optimal", 0: "Not Solved", -1: "Infeasible", -2: "Unbounded", -3: "Undefined"}
         print(f"Status: {status[self.model.status]}")
         print(f"Custo: {abs(self.model.objective.value()) if self.model.objective else 0}")
-        unitary_cost = 3.5
+        # unitary_cost = 3.5
 
-        wasted_capacity = sum(self.capacities[i] * (1 - self.y[i].varValue) for i in self.facilities)
-        used_demand = sum(self.demand[j] * self.x[i, j].varValue for i in self.facilities for j in self.customers)
+        # wasted_capacity = sum(self.capacities[i] * (1 - self.y[i].varValue) for i in self.facilities)
+        # used_demand = sum(self.demand[j] * self.x[i, j].varValue for i in self.facilities for j in self.customers)
 
-        wasted_price = (wasted_capacity - used_demand) * unitary_cost
-
-        # Falta inserir unitary_cost na equação objetivo
-        # print(f"Custo de desperdício: {wasted_price}")
-
+        # wasted_price = (wasted_capacity - used_demand) * unitary_cost
         for i in self.facilities:
-            print(f"    Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'}")
+            if not self.y[i].varValue:
+                continue
+            print(f"Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'} - "
+                  f"atendendo um total de {(sum(self.x[i, j].varValue for j in self.customers)):.2f}% clientes")
             for j in self.customers:
-                print(f"    Custo do local {j} ao ponto {i}: {self.x[i, j].varValue}")
+                if not self.x[i, j].varValue:
+                    continue
+                print(f"    Custo do local {j} ao ponto {i}: {self.x[i, j].varValue :.2f}")
+
+        print(f"Pontos de distribuição usados: {int(sum(self.y[i].varValue for i in self.facilities))}")
 
     @staticmethod
     def get_solver(solver_name):
+        time_limit = 300
         match solver_name:
-            case "SCIP":
-                solver = SCIP_CMD()
-            case "GUROBI":
-                solver = GUROBI_CMD()
+            case "scip":
+                print("Using SCIP solver")
+                solver = SCIP_CMD(timeLimit=time_limit)
+            case "gurobi":
+                print("Using Gurobi solver")
+                solver = GUROBI_CMD(timeLimit=time_limit)
             case _:
-                print("Invalid solver name. Using default solver.")
-                solver = SCIP_CMD()
+                print("Invalid solver name. Using default solver (CBC)")
+                solver = PULP_CBC_CMD(timeLimit=time_limit)
 
         return solver
+
+    def solve(self, solver_name, path="output"):
+        solver = self.get_solver(solver_name)
+
+        stdout = sys.stdout
+
+        folder = f"{path}/{solver_name}"
+
+        if solver_name is None:
+            folder = f"{path}/default"
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        sys.stdout = open(f"{folder}/log.txt", "w")
+        self.model.solve(solver)
+
+        sys.stdout = open(f"{folder}/out.txt", "w")
+        self.print_solution()
+
+        sys.stdout = stdout
 
 
 def read_data(filename):
@@ -78,33 +107,46 @@ def read_data(filename):
         customers = list(range(num_customers))
 
         capacities = {}
-        fixed_costs = {}
+        implementation_costs = {}
         for i in range(num_facilities):
-            capacity, cost = map(int, file.readline().split())
+            capacity, implementation_cost = map(int, file.readline().split())
             capacities[facilities[i]] = capacity
-            fixed_costs[facilities[i]] = cost
+            implementation_costs[facilities[i]] = implementation_cost
 
-        profits = {}
         demand = {}
+        fixed_costs = {}
 
         for j in range(num_customers):
             data = list(map(int, file.readline().split()))
             demand[customers[j]] = data[0]
-            profits[customers[j]] = {facilities[i]: data[i + 1] for i in range(num_facilities)}
+            fixed_costs[customers[j]] = {facilities[i]: data[i + 1] for i in range(num_facilities)}
 
-        return facilities, customers, profits, fixed_costs, capacities, demand
+        return facilities, customers, capacities, implementation_costs, demand, fixed_costs
 
 
-def main(filename, solver_name=None):
-    facilities, customers, profits, fixed_costs, capacities, demand = read_data(filename)
-    problem = FacilityLocationProblem(facilities, customers, profits, fixed_costs, capacities, demand)
+def main(filename, solver_name=None, relaxed=True):
+    print(f"Reading data from {filename}")
+    print("Relaxed: ", relaxed)
+    problem = FacilityLocationProblem(*read_data(filename), relaxed=relaxed)
+
+    print("Setting up problem...")
     problem.setup_problem()
-    problem.solve(solver_name)
-    problem.print_solution()
+
+    try:
+        print("Solving - ", end="")
+        problem.solve(solver_name)
+
+        print("Done, output saved to output folder")
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in [2, 3]:
-        print("Usage: python facility_location.py <filename> [solver_name]")
+    if len(sys.argv) not in [2, 3, 4]:
+        print("Usage: python facility_location.py <filename> [solver_name] [relaxed]")
+        print("Available solvers: scip, gurobi, default")
     else:
-        main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None)
+        try:
+            main(*sys.argv[1:])
+        except Exception as e:
+            print(e)
