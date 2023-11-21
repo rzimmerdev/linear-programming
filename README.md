@@ -2,22 +2,20 @@
 Linear Constraint Integer solving for a facility allocation problem
 
 ## Installation
+You'll need to install the solvers locally, depending on the one you want to use
 
-### If you need to install conda
-
+### Using Conda for Solvers
 ```bash
-mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-rm -rf ~/miniconda3/miniconda.sh
+conda config --add channels http://conda.anaconda.org/gurobi
+conda install gurobi
 ```
-### If you already have conda
+
 ```bash
 conda config --add channels conda-forge
 conda install gcg papilo scip soplex zimpl
-pip install -r requirements.txt
 ```
-## Install pulp
+
+### Install pulp
 ```bash
 python -m pip install pulp
 ```
@@ -26,9 +24,9 @@ python -m pip install pulp
 
 Run with 
 ```bash
-python main.py data.txt SCIP
+python facility_location.py <filename> [solver_name] [relaxed]
 ```
-or
+For example, to run the toy.txt problem, using the GUROBI solver, run
 ```bash
-python main.py data.txt GUROBI
+python main.py data.txt gurobi
 ```

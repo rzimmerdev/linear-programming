@@ -134,7 +134,7 @@ def main(filename, solver_name=None, relaxed=True):
 
     try:
         print("Solving - ", end="")
-        problem.solve(solver_name)
+        problem.solve(solver_name, path=f"output/{filename.split('.')[0]}")
 
         print("Done, output saved to output folder")
     except Exception as e:
