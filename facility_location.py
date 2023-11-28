@@ -29,17 +29,19 @@ class FacilityLocationProblem:
                        lpSum(self.fixed_costs[j][i] * self.x[i, j] for i in self.facilities for j in self.customers),
                        "Objective")
 
+        for j in self.customers:
+            self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Customer_{j}"
+
         if self.relaxed:
-            for j in self.customers:
-                self.model += lpSum(self.x[i, j] for i in self.facilities) == 1, f"Customer_{j}"
+            for i in self.facilities:
+                self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i] *
+                               self.y[i], f"Capacity_{i}")
         else:
+            for i in self.facilities:
+                self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i], f"Capacity_{i}")
             for j in self.customers:
                 for i in self.facilities:
                     self.model += self.x[i, j] <= self.y[i], f"Customer_{j}_{i}"
-
-        for i in self.facilities:
-            self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i] *
-                           self.y[i], f"Capacity_{i}")
 
     def print_solution(self):
         status = {1: "Optimal", 0: "Not Solved", -1: "Infeasible", -2: "Unbounded", -3: "Undefined"}
@@ -80,8 +82,6 @@ class FacilityLocationProblem:
         return solver
 
     def solve(self, solver_name, path="output"):
-        solver = self.get_solver(solver_name)
-
         stdout = sys.stdout
 
         folder = f"{path}/{solver_name}"
@@ -90,12 +90,16 @@ class FacilityLocationProblem:
             folder = f"{path}/default"
         if not os.path.exists(folder):
             os.makedirs(folder)
+        solver = self.get_solver(solver_name)
 
         sys.stdout = open(f"{folder}/log.txt", "w")
         self.model.solve(solver)
 
+        sys.stdout.close()
+
         sys.stdout = open(f"{folder}/out.txt", "w")
         self.print_solution()
+        sys.stdout.close()
 
         sys.stdout = stdout
 
