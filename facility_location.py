@@ -20,11 +20,12 @@ class FacilityLocationProblem:
 
     def setup_problem(self):
         # Variables
-        # x: Continuous 0 <= x <= 1
+        # x: Continuous 0 <= x <= inf
+        # y: Binary 0 <= y <= 1
         self.x = LpVariable.dicts("X",
                                   ((i, j) for i in self.facilities for j in self.customers),
-                                  0, 1, LpContinuous)
-        self.y = LpVariable.dicts("Y", self.facilities, 0, None, LpBinary)
+                                  0, None, LpContinuous)
+        self.y = LpVariable.dicts("Y", self.facilities, 0, 1, LpBinary)
         self.model += (lpSum(self.implementation_costs[i] * self.y[i] for i in self.facilities) +
                        lpSum(self.fixed_costs[j][i] * self.x[i, j] for i in self.facilities for j in self.customers),
                        "Objective")
@@ -39,8 +40,7 @@ class FacilityLocationProblem:
         else:
             for i in self.facilities:
                 self.model += (lpSum(self.x[i, j] * self.demand[j] for j in self.customers) <= self.capacities[i], f"Capacity_{i}")
-            for j in self.customers:
-                for i in self.facilities:
+                for j in self.customers:
                     self.model += self.x[i, j] <= self.y[i], f"Customer_{j}_{i}"
 
     def print_solution(self):
@@ -66,7 +66,7 @@ class FacilityLocationProblem:
         print(f"Pontos de distribuição usados: {int(sum(self.y[i].varValue for i in self.facilities))}")
 
     @staticmethod
-    def get_solver(solver_name):
+    def get_solver(solver_name, logPath=None):
         time_limit = 300
         match solver_name:
             case "scip":
@@ -74,14 +74,14 @@ class FacilityLocationProblem:
                 solver = SCIP_CMD(timeLimit=time_limit)
             case "gurobi":
                 print("Using Gurobi solver")
-                solver = GUROBI_CMD(timeLimit=time_limit)
+                solver = GUROBI_CMD(timeLimit=time_limit, logPath=logPath)
             case _:
                 print("Invalid solver name. Using default solver (CBC)")
                 solver = PULP_CBC_CMD(timeLimit=time_limit)
 
         return solver
 
-    def solve(self, solver_name, path="output"):
+    def solve(self, solver_name, path):
         stdout = sys.stdout
 
         folder = f"{path}/{solver_name}"
@@ -90,9 +90,9 @@ class FacilityLocationProblem:
             folder = f"{path}/default"
         if not os.path.exists(folder):
             os.makedirs(folder)
-        solver = self.get_solver(solver_name)
-
         sys.stdout = open(f"{folder}/log.txt", "w")
+
+        solver = self.get_solver(solver_name, logPath=f"{folder}/log.txt")
         self.model.solve(solver)
 
         sys.stdout.close()
@@ -128,8 +128,9 @@ def read_data(filename):
         return facilities, customers, capacities, implementation_costs, demand, fixed_costs
 
 
-def main(filename, solver_name=None, relaxed=True):
+def main(filename, solver_name=None, relaxed="true"):
     print(f"Reading data from {filename}")
+    relaxed = True if relaxed == "true" else False
     print("Relaxed: ", relaxed)
     problem = FacilityLocationProblem(*read_data(filename), relaxed=relaxed)
 
@@ -138,7 +139,7 @@ def main(filename, solver_name=None, relaxed=True):
 
     try:
         print("Solving - ", end="")
-        problem.solve(solver_name, path=f"output/{filename.split('.')[0]}")
+        problem.solve(solver_name, path=f"output/{'relaxed' if relaxed else 'unrelaxed'}/{filename.split('.')[0]}")
 
         print("Done, output saved to output folder")
     except Exception as e:
