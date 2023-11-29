@@ -57,7 +57,7 @@ class FacilityLocationProblem:
             if not self.y[i].varValue:
                 continue
             print(f"Ponto de distribuição {i}: {'Sim' if self.y[i].varValue else 'Não'} - "
-                  f"atendendo um total de {(sum(self.x[i, j].varValue for j in self.customers)):.2f}% clientes")
+                  f"atendendo um total de {(sum(self.x[i, j].varValue for j in self.customers)):.2f} clientes")
             for j in self.customers:
                 if not self.x[i, j].varValue:
                     continue
