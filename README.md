@@ -28,5 +28,5 @@ python facility_location.py <filename> [solver_name] [relaxed "true" or "false"]
 ```
 For example, to run the toy.txt problem, using the GUROBI solver, run
 ```bash
-python facility_location.py data.txt gurobi
+python facility_location.py toy.txt scip
 ```
